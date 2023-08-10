@@ -1,20 +1,7 @@
 import json
 import os
 import sys
-import threading
-
-from pynput import keyboard
 from termcolor import colored
-
-
-def on_release(key):
-    try:
-        if key == keyboard.KeyCode.from_char("r"):
-            Aimbot.update_status_aimbot()
-        if key == keyboard.Key.f2:
-            Aimbot.clean_up()
-    except NameError:
-        pass
 
 def setup():
     path = "lib/config"
@@ -65,6 +52,4 @@ Hyper's Aimbot
     if "collect_data" in sys.argv and not path_exists:
         os.makedirs("lib/data")
     from lib.aimbot import Aimbot, main
-    listener = keyboard.Listener(on_release=on_release)
-    listener.start()
     main()

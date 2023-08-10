@@ -17,6 +17,7 @@ from tkinter import *
 import customtkinter
 import threading
 from termcolor import colored
+from pynput import keyboard
 
 aimbotEnabled = False
 show = False
@@ -65,7 +66,7 @@ class Aimbot:
         sens_config = json.load(f)
     aimbot_status = colored("ENABLED", 'green')
 
-    def __init__(self, box_constant = 400, collect_data = False, mouse_delay = 0.0000001, debug = False):
+    def __init__(self, box_constant = 500, collect_data = False, mouse_delay = 0.0000001, debug = False):
         #controls the initial centered box width and height of the "Hyper Aim" window
         self.box_constant = box_constant #controls the size of the detection box (equaling the width and height)
 
@@ -162,19 +163,19 @@ class Aimbot:
         Aimbot.update_status_aimbot()
         half_screen_width = ctypes.windll.user32.GetSystemMetrics(0)/2 #this should always be 860
         half_screen_height = ctypes.windll.user32.GetSystemMetrics(1)/2 #this should always be 540
-        detection_box = {'left': int(half_screen_width - self.box_constant//2), #x1 coord (for top-left corner of the box)
-                          'top': int(half_screen_height - self.box_constant//2), #y1 coord (for top-left corner of the box)
-                          'width': int(self.box_constant),  #width of the box
-                          'height': int(self.box_constant)} #height of the box
+        
         if self.collect_data:
             collect_pause = 0
 
         while True:
+            detection_box = {'left': int(half_screen_width - self.box_constant//2), #x1 coord (for top-left corner of the box)
+                          'top': int(half_screen_height - self.box_constant//2), #y1 coord (for top-left corner of the box)
+                          'width': int(self.box_constant),  #width of the box
+                          'height': int(self.box_constant)} #height of the box
             start_time = time.perf_counter()
             frame = np.array(Aimbot.screen.grab(detection_box))
             if self.collect_data: orig_frame = np.copy((frame))
             results = self.model(frame)
-
             if len(results.xyxy[0]) != 0: #player detected
                 least_crosshair_dist = closest_detection = player_in_frame = False
                 for *box, conf, cls in results.xyxy[0]: #iterate over each player detected
@@ -249,31 +250,45 @@ class App(threading.Thread):
         global ready
         self.root = customtkinter.CTk()
         customtkinter.set_appearance_mode("dark")
-        self.root.geometry("600x400")
-        self.root.minsize(400, 300)
+        self.root.geometry("500x500")
+        self.root.minsize(500, 500)
         self.root.title("Hyper Aim Private")
+        self.root.wm_attributes("-alpha", 0.8)
         self.root.protocol("WM_DELETEWINDOW", self.callback)
         self.title = customtkinter.CTkLabel(self.root, text="Hyper Private", font=("San Serif", 40, "bold"))
-        self.title.place(relx=0.5, rely=0.2, anchor=CENTER)
+        self.title.place(relx=0.5, rely=0.17, anchor=CENTER)
 
         self.iouScale = customtkinter.CTkSlider(self.root, from_=1, to=10, command=self.updateIou)
-        self.iouScale.place(relx=0.5, rely=0.47, anchor=CENTER)
+        self.iouScale.place(relx=0.5, rely=0.37, anchor=CENTER)
         self.iouLabel = customtkinter.CTkLabel(self.root, text="IoU: 5.0", font=("San Serif", 16, "bold"))
-        self.iouLabel.place(relx=0.5, rely=0.40, anchor=CENTER)
+        self.iouLabel.place(relx=0.5, rely=0.30, anchor=CENTER)
 
         self.confidenceScale = customtkinter.CTkSlider(self.root, from_=1, to=10, command=self.updateText)
-        self.confidenceScale.place(relx=0.5, rely=0.62, anchor=CENTER)
+        self.confidenceScale.place(relx=0.5, rely=0.52, anchor=CENTER)
         self.confidenceLabel = customtkinter.CTkLabel(self.root, text="Confidence: 5.0", font=("San Serif", 16, "bold"))
-        self.confidenceLabel.place(relx=0.5, rely=0.55, anchor=CENTER)
+        self.confidenceLabel.place(relx=0.5, rely=0.45, anchor=CENTER)
 
-        self.rangeScale = customtkinter.CTkSlider(self.root, from_=40, to=800 , command=self.updateRange)
-        self.rangeScale.place(relx=0.5, rely=0.77, anchor=CENTER)
-        self.rangeLabel = customtkinter.CTkLabel(self.root, text="Softaim Range: 500", font=("San Serif", 16, "bold"))
-        self.rangeLabel.place(relx=0.5, rely=0.70, anchor=CENTER)
+        self.rangeScale = customtkinter.CTkSlider(self.root, from_=40, to=1080 , command=self.updateRange)
+        self.rangeScale.place(relx=0.5, rely=0.67, anchor=CENTER)
+        self.rangeLabel = customtkinter.CTkLabel(self.root, text="Softaim Range: 500 pixels", font=("San Serif", 16, "bold"))
+        self.rangeLabel.place(relx=0.5, rely=0.60, anchor=CENTER)
 
         self.enableAimbot = customtkinter.CTkCheckBox(self.root, text="Enable Aimbot", command=self.updateGame)
-        self.enableAimbot.place(relx=0.5, rely=0.9, anchor=CENTER)
+        self.enableAimbot.place(relx=0.25, rely=0.85, anchor=CENTER)
+
+        self.enableOverlay = customtkinter.CTkCheckBox(self.root, text="Enable Overlay", command=self.updateOverlay)
+        self.enableOverlay.select()
+        self.enableOverlay.place(relx=0.50, rely=0.85, anchor=CENTER)
+
+        self.darkMode = customtkinter.CTkCheckBox(self.root, text="Dark Mode", command=self.setDark)
+        self.darkMode.select()
+        self.darkMode.place(relx=0.75, rely=0.85, anchor=CENTER)
+
         self.root.mainloop()
+
+    def setDark(self):
+        if self.darkMode.get() == 0: customtkinter.set_appearance_mode("light")
+        else: customtkinter.set_appearance_mode("dark")
 
     def updateGame(self):
         global aimbotEnabled
@@ -287,6 +302,15 @@ class App(threading.Thread):
             if showAimbotStatus: status.updateText()
         sys.stdout.write("\033[K")
         print(f"[!] AIMBOT IS [{Aimbot.aimbot_status}]", end = "\r")
+
+    def updateOverlay(self):
+        global showAimbotStatus
+        if self.enableOverlay.get() == 0: 
+            showAimbotStatus = False
+            status.hide()
+        else: 
+            showAimbotStatus = True
+            status.show()
 
     def updateText(self, val):
         global confidenceVal
@@ -303,26 +327,26 @@ class App(threading.Thread):
     def updateRange(self, val):
         global rangeVal
         rangeVal = round(val)
-        self.rangeLabel.configure(text="Softaim Range: " + str(rangeVal))
+        self.rangeLabel.configure(text="Softaim Range: " + str(rangeVal) + " pixels")
         hyper.box_constant = rangeVal
 
     def updateAimbot(self):
         global aimbotEnabled
-        if self.enableAimbot.get() == 0: aimbotEnabled = False
-        else: aimbotEnabled = True
+        if self.enableAimbot.get() == 0: 
+            aimbotEnabled = False
+        else: 
+            aimbotEnabled = True
+    
+    def show(self):
+        self.root.wm_state('withdraw')
+
+
+    def hide(self):
+        self.root.wm_state('iconic')
+
+            
 
 app = App()
-
-def set_clickthrough(hwnd, root):
-    # Get window style and perform a 'bitwise or' operation to make the style layered and transparent, achieving
-    # the clickthrough property
-    l_ex_style = win32gui.GetWindowLong(hwnd, win32con.GWL_EXSTYLE)
-    l_ex_style |= win32con.WS_EX_TRANSPARENT | win32con.WS_EX_LAYERED
-    win32gui.SetWindowLong(hwnd, win32con.GWL_EXSTYLE, l_ex_style)
-
-    # Set the window to be transparent and appear always on top
-    win32gui.SetLayeredWindowAttributes(hwnd, win32api.RGB(0, 0, 0), 190, win32con.LWA_ALPHA)  # transparent
-    win32gui.SetWindowPos(hwnd, win32con.HWND_TOPMOST, root.winfo_x(), root.winfo_y(), 300, 100, 0)
 
 class Status(threading.Thread):
 
@@ -338,7 +362,6 @@ class Status(threading.Thread):
         self.root = Tk()
         self.root.geometry("1720x1080")
         self.root.lift()
-        # self.root.attributes('-transparentcolor', 'white', '-topmost', 1)
         self.root.config(bg='white') 
         self.root.title("Status")
         self.root.wm_attributes("-transparentcolor", "white")   
@@ -347,10 +370,6 @@ class Status(threading.Thread):
         self.label = Label(self.root, text="Aimbot [Disabled]", fg="red")
         self.label.pack()
         self.label.place(relx = 1, rely = 0.05, anchor = 'ne')
-        # width = 1720 #self.winfo_screenwidth()
-        # height = 1080 #self.winfo_screenheight()
-        # bg = Canvas(self.root, width=width, height=height, bd=0, highlightthickness=0)
-        # set_clickthrough(bg.winfo_id(), self.root)
         self.set_click_through()
         self.root.mainloop()
         
@@ -366,15 +385,35 @@ class Status(threading.Thread):
         else:
             self.label.config(text="Aimbot [Disabled]", fg="red")
 
+    def hide(self):
+        self.root.withdraw()
+    
+    def show(self):
+        self.root.deiconify()
+
 
         
 
 if showAimbotStatus: status = Status()
 
+def on_release(key):
+    try:
+        if key == keyboard.Key.insert: app.show()
+        if key == keyboard.Key.delete: app.hide()
+        if key == keyboard.KeyCode.from_char("r"):
+            Aimbot.update_status_aimbot()
+        if key == keyboard.Key.f2:
+            Aimbot.clean_up()
+    except NameError:
+        pass
 
 def main():
     global hyper
     hyper = Aimbot(collect_data = "collect_data" in sys.argv)
     hyper.start()
+
+
+listener = keyboard.Listener(on_release=on_release)
+listener.start()
 
 if __name__ == "__main__": print("You are in the wrong directory and are running the wrong file; you must run hyper.py")
