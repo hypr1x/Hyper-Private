@@ -22,6 +22,8 @@ from pynput import keyboard
 aimbotEnabled = False
 show = False
 showAimbotStatus = True
+resx = 1720
+resy = 1080
 
 PUL = ctypes.POINTER(ctypes.c_ulong)
 class KeyBdInput(ctypes.Structure):
@@ -122,7 +124,7 @@ class Aimbot:
     def is_target_locked(x, y):
         #plus/minus 5 pixel threshold
         threshold = 5
-        return True if 860 - threshold <= x <= 860 + threshold and 540 - threshold <= y <= 540 + threshold else False
+        return True if resx/2 - threshold <= x <= resx/2 + threshold and resy/2 - threshold <= y <= resy/2 + threshold else False
 
     def move_crosshair(self, x, y):
         if Aimbot.is_targeted():
@@ -144,8 +146,8 @@ class Aimbot:
 
     #generator yields pixel tuples for relative movement
     def interpolate_coordinates_from_center(absolute_coordinates, scale):
-        diff_x = (absolute_coordinates[0] - 860) * scale/Aimbot.pixel_increment
-        diff_y = (absolute_coordinates[1] - 540) * scale/Aimbot.pixel_increment
+        diff_x = (absolute_coordinates[0] - resx/2) * scale/Aimbot.pixel_increment
+        diff_y = (absolute_coordinates[1] - resy/2) * scale/Aimbot.pixel_increment
         length = int(math.dist((0,0), (diff_x, diff_y)))
         if length == 0: return
         unit_x = (diff_x/length) * Aimbot.pixel_increment
@@ -338,11 +340,10 @@ class App(threading.Thread):
             aimbotEnabled = True
     
     def show(self):
-        self.root.wm_state('withdraw')
-
+        self.root.deiconify()
 
     def hide(self):
-        self.root.wm_state('iconic')
+        self.root.iconify()
 
             
 
@@ -360,7 +361,7 @@ class Status(threading.Thread):
     def run(self):
         global ready
         self.root = Tk()
-        self.root.geometry("1720x1080")
+        self.root.geometry(str(resx) + "x" + str(resy))
         self.root.lift()
         self.root.config(bg='white') 
         self.root.title("Status")
@@ -400,12 +401,9 @@ def on_release(key):
     try:
         if key == keyboard.Key.insert: app.show()
         if key == keyboard.Key.delete: app.hide()
-        if key == keyboard.KeyCode.from_char("r"):
-            Aimbot.update_status_aimbot()
-        if key == keyboard.Key.f2:
-            Aimbot.clean_up()
-    except NameError:
-        pass
+        if key == keyboard.KeyCode.from_char("r"): Aimbot.update_status_aimbot()
+        if key == keyboard.Key.f2: Aimbot.clean_up()
+    except NameError: pass
 
 def main():
     global hyper
