@@ -13,9 +13,14 @@ import win32api
 import win32con
 import win32gui
 import win32api
-
+from tkinter import *
+import customtkinter
+import threading
 from termcolor import colored
 
+aimbotEnabled = False
+show = False
+showAimbotStatus = True
 
 PUL = ctypes.POINTER(ctypes.c_ulong)
 class KeyBdInput(ctypes.Structure):
@@ -60,7 +65,7 @@ class Aimbot:
         sens_config = json.load(f)
     aimbot_status = colored("ENABLED", 'green')
 
-    def __init__(self, box_constant = 300, collect_data = False, mouse_delay = 0.0000001, debug = False):
+    def __init__(self, box_constant = 400, collect_data = False, mouse_delay = 0.0000001, debug = False):
         #controls the initial centered box width and height of the "Hyper Aim" window
         self.box_constant = box_constant #controls the size of the detection box (equaling the width and height)
 
@@ -72,8 +77,8 @@ class Aimbot:
             print(colored("[!] CUDA ACCELERATION IS UNAVAILABLE", "red"))
             print(colored("[!] Check your PyTorch installation, else performance will be poor", "red"))
 
-        self.model.conf = 0.72 # base confidence threshold (or base detection (0-1)
-        self.model.iou = 0.72 # NMS IoU (0-1)
+        self.model.conf = 0.75 # base confidence threshold (or base detection (0-1)
+        self.model.iou = 0.75 # NMS IoU (0-1)
         self.collect_data = collect_data
         self.mouse_delay = mouse_delay
         self.debug = debug
@@ -81,10 +86,17 @@ class Aimbot:
         print("\n[INFO] PRESS 'r' TO TOGGLE AIMBOT\n[INFO] PRESS 'F2' TO QUIT")
 
     def update_status_aimbot():
+        global aimbotEnabled
         if Aimbot.aimbot_status == colored("ENABLED", 'green'):
             Aimbot.aimbot_status = colored("DISABLED", 'red')
+            aimbotEnabled = False
+            app.enableAimbot.deselect()
+            if showAimbotStatus: status.updateText()
         else:
             Aimbot.aimbot_status = colored("ENABLED", 'green')
+            aimbotEnabled = True
+            app.enableAimbot.select()
+            if showAimbotStatus: status.updateText()
         sys.stdout.write("\033[K")
         print(f"[!] AIMBOT IS [{Aimbot.aimbot_status}]", end = "\r")
 
@@ -212,7 +224,7 @@ class Aimbot:
                 collect_pause = time.perf_counter()
             
             cv2.putText(frame, f"FPS: {int(1/(time.perf_counter() - start_time))}", (5, 30), cv2.FONT_HERSHEY_DUPLEX, 1, (113, 116, 244), 2)
-            cv2.imshow("Hyper AIM", frame)
+            if show: cv2.imshow("Hyper AIM", frame)
             if cv2.waitKey(1) & 0xFF == ord('0'):
                 break
 
@@ -220,5 +232,149 @@ class Aimbot:
         print("\n[INFO] F2 WAS PRESSED. QUITTING...")
         Aimbot.screen.close()
         os._exit(0)
+
+confidenceVal = 5.0
+ready = False
+
+class App(threading.Thread):
+
+    def __init__(self):
+        threading.Thread.__init__(self)
+        self.start()
+
+    def callback(self):
+        self.root.quit()
+
+    def run(self):
+        global ready
+        self.root = customtkinter.CTk()
+        customtkinter.set_appearance_mode("dark")
+        self.root.geometry("600x400")
+        self.root.minsize(400, 300)
+        self.root.title("Hyper Aim Private")
+        self.root.protocol("WM_DELETEWINDOW", self.callback)
+        self.title = customtkinter.CTkLabel(self.root, text="Hyper Private", font=("San Serif", 40, "bold"))
+        self.title.place(relx=0.5, rely=0.2, anchor=CENTER)
+
+        self.iouScale = customtkinter.CTkSlider(self.root, from_=1, to=10, command=self.updateIou)
+        self.iouScale.place(relx=0.5, rely=0.47, anchor=CENTER)
+        self.iouLabel = customtkinter.CTkLabel(self.root, text="IoU: 5.0", font=("San Serif", 16, "bold"))
+        self.iouLabel.place(relx=0.5, rely=0.40, anchor=CENTER)
+
+        self.confidenceScale = customtkinter.CTkSlider(self.root, from_=1, to=10, command=self.updateText)
+        self.confidenceScale.place(relx=0.5, rely=0.62, anchor=CENTER)
+        self.confidenceLabel = customtkinter.CTkLabel(self.root, text="Confidence: 5.0", font=("San Serif", 16, "bold"))
+        self.confidenceLabel.place(relx=0.5, rely=0.55, anchor=CENTER)
+
+        self.rangeScale = customtkinter.CTkSlider(self.root, from_=40, to=800 , command=self.updateRange)
+        self.rangeScale.place(relx=0.5, rely=0.77, anchor=CENTER)
+        self.rangeLabel = customtkinter.CTkLabel(self.root, text="Softaim Range: 500", font=("San Serif", 16, "bold"))
+        self.rangeLabel.place(relx=0.5, rely=0.70, anchor=CENTER)
+
+        self.enableAimbot = customtkinter.CTkCheckBox(self.root, text="Enable Aimbot", command=self.updateGame)
+        self.enableAimbot.place(relx=0.5, rely=0.9, anchor=CENTER)
+        self.root.mainloop()
+
+    def updateGame(self):
+        global aimbotEnabled
+        if self.enableAimbot.get() == 0: 
+            Aimbot.aimbot_status = colored("DISABLED", 'red')
+            aimbotEnabled = False
+            if showAimbotStatus: status.updateText()
+        else:
+            Aimbot.aimbot_status = colored("ENABLED", 'green')
+            aimbotEnabled = True
+            if showAimbotStatus: status.updateText()
+        sys.stdout.write("\033[K")
+        print(f"[!] AIMBOT IS [{Aimbot.aimbot_status}]", end = "\r")
+
+    def updateText(self, val):
+        global confidenceVal
+        confidenceVal = round(val, 1)
+        self.confidenceLabel.configure(text="Confidence: " + str(confidenceVal))
+        hyper.model.conf = confidenceVal/10
+
+    def updateIou(self, val):
+        global iouVal
+        iouVal = round(val, 1)
+        self.iouLabel.configure(text="IoU: " + str(iouVal))
+        hyper.model.iou = iouVal/10
+
+    def updateRange(self, val):
+        global rangeVal
+        rangeVal = round(val)
+        self.rangeLabel.configure(text="Softaim Range: " + str(rangeVal))
+        hyper.box_constant = rangeVal
+
+    def updateAimbot(self):
+        global aimbotEnabled
+        if self.enableAimbot.get() == 0: aimbotEnabled = False
+        else: aimbotEnabled = True
+
+app = App()
+
+def set_clickthrough(hwnd, root):
+    # Get window style and perform a 'bitwise or' operation to make the style layered and transparent, achieving
+    # the clickthrough property
+    l_ex_style = win32gui.GetWindowLong(hwnd, win32con.GWL_EXSTYLE)
+    l_ex_style |= win32con.WS_EX_TRANSPARENT | win32con.WS_EX_LAYERED
+    win32gui.SetWindowLong(hwnd, win32con.GWL_EXSTYLE, l_ex_style)
+
+    # Set the window to be transparent and appear always on top
+    win32gui.SetLayeredWindowAttributes(hwnd, win32api.RGB(0, 0, 0), 190, win32con.LWA_ALPHA)  # transparent
+    win32gui.SetWindowPos(hwnd, win32con.HWND_TOPMOST, root.winfo_x(), root.winfo_y(), 300, 100, 0)
+
+class Status(threading.Thread):
+
+    def __init__(self):
+        threading.Thread.__init__(self)
+        self.start()
+
+    def callback(self):
+        self.root.quit()
+
+    def run(self):
+        global ready
+        self.root = Tk()
+        self.root.geometry("1720x1080")
+        self.root.lift()
+        # self.root.attributes('-transparentcolor', 'white', '-topmost', 1)
+        self.root.config(bg='white') 
+        self.root.title("Status")
+        self.root.wm_attributes("-transparentcolor", "white")   
+        self.root.wm_attributes('-fullscreen', 'True')
+        self.root.wm_attributes('-topmost', 'True')
+        self.label = Label(self.root, text="Aimbot [Disabled]", fg="red")
+        self.label.pack()
+        self.label.place(relx = 1, rely = 0.05, anchor = 'ne')
+        # width = 1720 #self.winfo_screenwidth()
+        # height = 1080 #self.winfo_screenheight()
+        # bg = Canvas(self.root, width=width, height=height, bd=0, highlightthickness=0)
+        # set_clickthrough(bg.winfo_id(), self.root)
+        self.set_click_through()
+        self.root.mainloop()
+        
+    def set_click_through(self):
+        hwnd = self.root.winfo_id()
+        extended_style = win32gui.GetWindowLong(hwnd, win32con.GWL_EXSTYLE)
+        win32gui.SetWindowLong(hwnd, win32con.GWL_EXSTYLE, extended_style | win32con.WS_EX_TRANSPARENT)
+        self.root.update_idletasks()  # Apply the changes
+        
+    def updateText(self):
+        if aimbotEnabled == True:
+            self.label.config(text="Aimbot [Enabled]", fg="green")
+        else:
+            self.label.config(text="Aimbot [Disabled]", fg="red")
+
+
+        
+
+if showAimbotStatus: status = Status()
+
+
+def main():
+    global hyper
+    hyper = Aimbot(collect_data = "collect_data" in sys.argv)
+    hyper.start()
 
 if __name__ == "__main__": print("You are in the wrong directory and are running the wrong file; you must run hyper.py")
